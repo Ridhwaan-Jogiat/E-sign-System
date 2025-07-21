@@ -184,6 +184,9 @@ You can log in with the default users and explore the document upload, signature
 ### Boss Document Viewer and Signing
 ![Boss Document Viewer and Signing](https://i.imgur.com/hR1PVGi.png)
 
+### Signed Document View
+![Signed Document View](https://i.imgur.com/evTXEIP.png)
+
 ## License
 
 This project is for portfolio and demonstration use only. 
