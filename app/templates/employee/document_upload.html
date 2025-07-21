@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+
+{% block title %}Upload Document - E-Signature App{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8 offset-md-2">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="card-title">Upload Document for Signature</h4>
+            </div>
+            <div class="card-body">
+                <form id="uploadForm" method="POST" action="{{ url_for('documents.upload_document') }}" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label for="document" class="form-label">Select Document (PDF, DOC, DOCX)</label>
+                        <input type="file" class="form-control" id="document" name="document" required
+                               accept=".pdf,.doc,.docx">
+                        <div class="form-text">
+                            Maximum file size: 16MB
+                        </div>
+                    </div>
+                    <!-- Placeholder Help Section -->
+                    <div class="alert alert-info">
+                        <strong>Placeholders you can use in your document:</strong><br>
+                        <ul>
+                            <li><code>{INITIALS}</code> - Your initials</li>
+                            <li><code>{BOSS_SIGNATURE}</code> - Boss's personal signature</li>
+                            <li><code>{COMPANY_SIGNATURE}</code> - Company signature (Rain Signature)</li>
+                        </ul>
+                        Insert these placeholders in your document where you want the corresponding signature or initials to appear.
+                    </div>
+                    <!-- Hidden fields for modal data -->
+                    <input type="hidden" name="client" id="hiddenClient">
+                    <input type="hidden" name="work" id="hiddenWork">
+                    <input type="hidden" name="document_type" id="hiddenDocumentType">
+                    <input type="hidden" name="comment" id="hiddenComment">
+                    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#detailsModal">Upload Document</button>
+                    <a href="{{ url_for('documents.dashboard') }}" class="btn btn-secondary">Cancel</a>
+                </form>
+
+                <!-- Modal -->
+                <div class="modal fade" id="detailsModal" tabindex="-1" aria-labelledby="detailsModalLabel" aria-hidden="true">
+                  <div class="modal-dialog">
+                    <div class="modal-content">
+                      <div class="modal-header">
+                        <h5 class="modal-title" id="detailsModalLabel">Document Details</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                      </div>
+                      <div class="modal-body">
+                        <div class="mb-3">
+                          <label for="clientInput" class="form-label">Client</label>
+                          <input type="text" class="form-control" id="clientInput" placeholder="Enter client name">
+                        </div>
+                        <div class="mb-3">
+                          <label for="workInput" class="form-label">Work</label>
+                          <input type="text" class="form-control" id="workInput" placeholder="Enter work">
+                        </div>
+                        <div class="mb-3">
+                          <label for="documentTypeInput" class="form-label">Type of Document</label>
+                          <input type="text" class="form-control" id="documentTypeInput" placeholder="Enter document type">
+                        </div>
+                        <div class="mb-3">
+                          <label for="commentInput" class="form-label">Comment</label>
+                          <textarea class="form-control" id="commentInput" rows="2" placeholder="Enter comment (optional)"></textarea>
+                        </div>
+                      </div>
+                      <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="button" class="btn btn-primary" id="submitDetailsBtn">Submit</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <script>
+                  document.getElementById('submitDetailsBtn').onclick = function() {
+                    // Copy modal values to hidden fields
+                    document.getElementById('hiddenClient').value = document.getElementById('clientInput').value;
+                    document.getElementById('hiddenWork').value = document.getElementById('workInput').value;
+                    document.getElementById('hiddenDocumentType').value = document.getElementById('documentTypeInput').value;
+                    document.getElementById('hiddenComment').value = document.getElementById('commentInput').value;
+                    // Submit the form
+                    document.getElementById('uploadForm').submit();
+                  };
+                </script>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

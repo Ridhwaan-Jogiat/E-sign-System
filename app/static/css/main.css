@@ -1,0 +1,47 @@
+/* Main styling for the e-signature application */
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #f8f9fa;
+}
+
+.navbar {
+    box-shadow: 0 2px 4px rgba(0,0,0,.1);
+}
+
+.card {
+    box-shadow: 0 4px 6px rgba(0,0,0,.1);
+    margin-bottom: 20px;
+}
+
+.card-header {
+    background-color: #f1f8ff;
+    border-bottom: 1px solid #e3f2fd;
+}
+
+.login-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 80vh;
+}
+
+.login-form {
+    width: 450px;
+    padding: 30px;
+    background-color: #fff;
+    border-radius: 8px;
+    box-shadow: 0 4px 10px rgba(0,0,0,.15);
+}
+
+.document-card {
+    transition: transform 0.2s;
+}
+
+.document-card:hover {
+    transform: translateY(-5px);
+}
+
+.badge {
+    font-weight: 500;
+    padding: 5px 10px;
+}

@@ -1,0 +1,1563 @@
+{% extends "base.html" %}
+
+{% block title %}Document Viewer - E-Signature App{% endblock %}
+
+{% block extra_css %}
+<style>
+    html, body {
+        height: 100%;
+        margin: 0;
+    }
+
+     .container-flex {
+        display: flex;
+        height: 100%;
+        width: 100%;
+        overflow: hidden;
+    }
+
+    .sidebar {
+        width: 260px;
+        min-width: 60px;
+        transition: width 0.3s ease;
+        background-color: #f8f9fa;
+        border-right: 1px solid #dee2e6;
+        overflow-y: auto;
+    }
+
+
+    .sidebar.collapsed {
+        width: 60px;
+    }
+
+    .sidebar.collapsed .sidebar-content {
+        display: none;
+    }
+
+    .sidebar-toggle {
+        background: none;
+        border: none;
+        font-size: 1.2rem;
+        padding: 10px;
+        width: 100%;
+        text-align: left;
+    }
+
+    #pdf-container {
+        width: 100%;
+        border: 1px solid #ddd;
+        overflow: auto;
+        position: relative;
+        max-height: 800px;
+        transition: margin-left 0.3s ease;
+    }
+    .pdf-page-container {
+        position: relative;
+        margin-bottom: 15px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        background: #fff;
+    }
+    .pdf-page {
+        display: block;
+    }
+    #pdf-loading {
+        text-align: center;
+        margin: 2rem;
+    }
+    .signature-controls,
+    .employee-controls {
+        position: sticky;
+        bottom: 0;
+        background-color: rgba(255, 255, 255, 0.95);
+        padding: 15px;
+        border-top: 1px solid #ddd;
+        z-index: 1000;
+    }
+    .signing-options {
+        border: 1px solid #ddd;
+        padding: 15px;
+        border-radius: 5px;
+        background-color: #f8f9fa;
+    }
+    .signature-placeholder {
+        position: absolute;
+        border: 2px dashed #007bff;
+        background-color: rgba(0, 123, 255, 0.05);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 100;
+        overflow: hidden; /* Changed from auto to hidden */
+        top: 0;
+        left: 0;
+    }
+    .signature-image {
+        max-width: 100%;
+        max-height: 100%;
+        object-fit: contain; /* Added to maintain aspect ratio */
+        pointer-events: none;
+        image-rendering: -webkit-optimize-contrast; /* Better rendering for small images */
+        image-rendering: crisp-edges; /* Firefox */
+    }
+    /* Special handling for initials to prevent blurriness */
+    .signature-placeholder[data-signature-type="initial"] {
+        min-width: 40px;
+        min-height: 20px;
+    }
+    .signature-placeholder[data-signature-type="initial"] .signature-image {
+        image-rendering: -webkit-optimize-contrast;
+        image-rendering: crisp-edges;
+        -ms-interpolation-mode: nearest-neighbor;
+        width: auto !important; /* Don't stretch to fill container */
+        height: auto !important;
+        max-width: 100%;
+        max-height: 100%;
+    }
+    .signature-delete {
+        position: absolute;
+        top: -8px;
+        right: -8px;
+        width: 20px;
+        height: 20px;
+        background-color: #dc3545;
+        color: white;
+        border-radius: 50%;
+        text-align: center;
+        line-height: 20px;
+        cursor: pointer;
+        font-weight: bold;
+        display: none;
+        z-index: 101;
+    }
+    .signature-placeholder:hover .signature-delete {
+        display: block;
+    }
+    .signature-resize-handle {
+        position: absolute;
+        bottom: 0;
+        right: 0;
+        width: 15px;
+        height: 15px;
+        background-color: #007bff;
+        cursor: se-resize;
+        border-radius: 50%;
+        border: 2px solid white;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+        z-index: 102;
+    }
+    .preview-placeholder {
+        position: absolute;
+        border: 2px dashed #28a745;
+        background-color: rgba(40, 167, 69, 0.05);
+        z-index: 50;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        pointer-events: none;
+        opacity: 0.8;
+    }
+    .preview-label {
+        font-size: 12px;
+        color: #28a745;
+        text-align: center;
+        font-weight: 500;
+    }
+    .signature-placement-count {
+        display: inline-block;
+        background-color: #28a745;
+        color: white;
+        border-radius: 50%;
+        width: 22px;
+        height: 22px;
+        text-align: center;
+        line-height: 22px;
+        margin-left: 5px;
+        font-size: 12px;
+        font-weight: 500;
+    }
+    #page-navigation {
+        justify-content: center;
+    }
+    .document-navigation {
+        position: sticky;
+        top: 10px;
+        z-index: 1000;
+        background-color: white;
+        padding: 8px;
+        border-radius: 4px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    .btn {
+        font-weight: 500;
+    }
+    .form-select {
+        border: 1px solid #ced4da;
+    }
+    .form-select:focus {
+        border-color: #80bdff;
+        box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
+    }
+    .badge {
+        font-weight: 500;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+{% if not document or not document.id %}
+  <div class="alert alert-danger">Error: Document not found or invalid. Please contact support.</div>
+{% else %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <h3>{{ document.original_filename }}</h3>
+        <p class="text-muted">
+            Uploaded on: {{ (document.upload_date.astimezone(pytz.timezone('Africa/Johannesburg')) + timedelta(hours=2)).strftime('%Y-%m-%d %H:%M') }} |
+            Status:
+            {% if document.status == 'pending' %}
+                <span class="badge bg-warning">Pending</span>
+            {% elif document.status == 'signed' %}
+                <span class="badge bg-success">Signed</span>
+            {% elif document.status == 'rejected' %}
+                <span class="badge bg-danger">Rejected</span>
+            {% endif %}
+        </p>
+    </div>
+    <div>
+        {% if document.status == 'signed' %}
+            <a href="{{ url_for('documents.download_document', document_id=document.id) }}" class="btn btn-success mb-2">Download Signed</a>
+        {% endif %}
+        <a href="{{ url_for('documents.dashboard') }}" class="btn btn-secondary mb-2">Back</a>
+    </div>
+</div>
+
+<div class="container-flex">
+    <!-- Sidebar -->
+    <div class="sidebar" id="sidebar">
+        <button class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
+        <div class="sidebar-content p-3">
+            {% if not current_user.is_boss() and document.status == 'pending' %}
+            <div class="employee-controls">
+                <h6>Employee Options</h6>
+                <div class="mb-3">
+                    <label for="placeholder-type" class="form-label">Placeholder Type</label>
+                    <select id="placeholder-type" class="form-select mb-2">
+                        <option value="signature">Full Signature</option>
+                        <option value="initial">Initials</option>
+                        <option value="company">Company Signature (Rain Signature)</option>
+                    </select>
+                </div>
+                <button id="add-placeholder" class="btn btn-primary mb-2 w-100">Add Placeholder</button>
+                <a href="#" id="show-help-modal" class="d-block mb-2">How to use?</a>
+                <div class="mb-3">
+                    <label class="form-label">Apply Placeholder to Page Range</label>
+                    <div class="input-group">
+                        <input type="number" id="range-start" class="form-control" min="1" value="1" style="max-width: 80px;">
+                        <span class="input-group-text">to</span>
+                        <input type="number" id="range-end" class="form-control" min="1" value="1" style="max-width: 80px;">
+                    </div>
+                    <button id="apply-placeholder-range" class="btn btn-primary mt-2">Apply</button>
+                </div>
+            </div>
+            <button id="save-placement" class="btn btn-success w-100">Save Placements</button>
+            {% endif %}
+
+            {% if current_user.is_boss() and document.status == 'pending' %}
+            <button id="add-signature" class="btn btn-primary mb-2 w-100">Add Signature</button>
+            <select id="page-selector" class="form-select mb-2"></select>
+            <div class="mb-3">
+                <label class="form-label">Apply Signature to Page Range</label>
+                <div class="input-group">
+                    <input type="number" id="signature-range-start" class="form-control" min="1" value="1" style="max-width: 80px;">
+                    <span class="input-group-text">to</span>
+                    <input type="number" id="signature-range-end" class="form-control" min="1" value="1" style="max-width: 80px;">
+                </div>
+                <button id="apply-signature-range" class="btn btn-primary mt-2">Apply</button>
+            </div>
+            <button id="remove-signatures" class="btn btn-outline-danger mb-2 w-100">Remove All</button>
+
+            <div class="signing-options border rounded p-3 mt-3 bg-light">
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="radio" name="signing-method" id="manual-signing" value="manual">
+                    <label class="form-check-label" for="manual-signing">Manual Signing</label>
+                </div>
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="radio" name="signing-method" id="auto-signing" value="auto" checked>
+                    <label class="form-check-label" for="auto-signing">One-Click Signing <span class="signature-placement-count"></span></label>
+                </div>
+                <!-- Signature selectors -->
+                <div id="signature-selectors">
+                    <div class="mb-4">
+                        <label class="form-label fw-bold">Select Full Signature</label>
+                        <select id="signature-select" class="form-select mb-2"></select>
+                    </div>
+                    <div class="mb-4">
+                        <label class="form-label fw-bold">Select Initials</label>
+                        <select id="initial-select" class="form-select mb-2"></select>
+                    </div>
+                    <div class="mb-4">
+                        <label class="form-label fw-bold">Select Company Signature (Rain Signature)</label>
+                        <select id="company-select" class="form-select mb-2"></select>
+                    </div>
+                </div>
+                <button id="sign-document" class="btn btn-success w-100 mt-2">Sign Document</button>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div id="pdf-container">
+        <div id="pdf-loading" class="text-center my-4">
+            <div class="spinner-border" role="status"></div>
+            <p>Loading document...</p>
+        </div>
+
+        <div class="document-navigation mb-3">
+            <nav>
+                <ul class="pagination justify-content-center" id="page-navigation">
+                    <li class="page-item disabled">
+                        <a class="page-link" href="#" aria-label="Previous" id="prev-page">&laquo;</a>
+                    </li>
+                    <!-- Page numbers -->
+                    <li class="page-item disabled">
+                        <a class="page-link" href="#" aria-label="Next" id="next-page">&raquo;</a>
+                    </li>
+                </ul>
+            </nav>
+        </div>
+
+        <div id="pdf-viewer-area"></div>
+    </div>
+</div>
+
+<!-- Help Modal -->
+<div class="modal fade" id="helpModal" tabindex="-1" aria-labelledby="helpModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="helpModalLabel">How to use</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <ol>
+          <li>Add and position a placeholder on the current page.</li>
+          <li>Use the range below to apply the same placeholder (position, size, type) to other pages.</li>
+        </ol>
+        <em>Note: The placeholder will be copied to all pages in the range except the current page.</em>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function toggleSidebar() {
+        const sidebar = document.getElementById('sidebar');
+        sidebar.classList.toggle('collapsed');
+    }
+</script>
+<script>
+document.addEventListener('DOMContentLoaded',()=> {
+    let signaturePositions = [];
+    let savedPositions = [];
+    let nextImgDims = { width: 150, height: 50 }; // Default dimensions
+    setInterval(enableSignatureEditing, 1000);
+
+    loadSignatureOptions();
+
+         function loadSignatureOptions() {
+        fetch('{{ url_for("signatures.get_all_signatures") }}')
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                const signatureSelect = document.getElementById('signature-select');
+                const initialSelect = document.getElementById('initial-select');
+                const companySelect = document.getElementById('company-select');
+                // Clear existing options
+                signatureSelect.innerHTML = '<option value="">Select a signature</option>';
+                initialSelect.innerHTML = '<option value="">Select initials</option>';
+                companySelect.innerHTML = '<option value="">Select company signature</option>';
+                data.signatures.forEach(sig => {
+                    const opt = document.createElement('option');
+                    opt.value = sig.id;
+                    opt.textContent = sig.display_name || `${sig.type.charAt(0).toUpperCase() + sig.type.slice(1)} ${sig.id}`;
+                    opt.dataset.path = sig.path;
+                    
+                    // Improved default selection logic
+                    if (sig.is_default) {
+                        opt.selected = true;
+                        console.log(`Setting default: ${sig.type} - ${sig.display_name || sig.id}`);
+                    }
+                    
+                    if (sig.type === 'signature') signatureSelect.appendChild(opt);
+                    else if (sig.type === 'initial') initialSelect.appendChild(opt);
+                    else if (sig.type === 'company') companySelect.appendChild(opt);
+                });
+
+                // Debug: Check if any defaults were set
+                console.log('Signature select default:', signatureSelect.value);
+                console.log('Initial select default:', initialSelect.value);
+                console.log('Company select default:', companySelect.value);
+
+                // Add event listeners for manual signing mode (mutual exclusion)
+                function clearOtherDropdowns(changedSelect) {
+                    if (document.querySelector('input[name="signing-method"]:checked').value === 'manual') {
+                        if (changedSelect === signatureSelect) {
+                            initialSelect.value = '';
+                            companySelect.value = '';
+                        } else if (changedSelect === initialSelect) {
+                            signatureSelect.value = '';
+                            companySelect.value = '';
+                        } else if (changedSelect === companySelect) {
+                            signatureSelect.value = '';
+                            initialSelect.value = '';
+                        }
+                    }
+                }
+                signatureSelect.addEventListener('change', function() {
+                    clearOtherDropdowns(signatureSelect);
+                });
+                initialSelect.addEventListener('change', function() {
+                    clearOtherDropdowns(initialSelect);
+                });
+                companySelect.addEventListener('change', function() {
+                    clearOtherDropdowns(companySelect);
+                });
+
+                // When switching to manual signing, clear all dropdowns
+                const manualRadio = document.getElementById('manual-signing');
+                if (manualRadio) {
+                    manualRadio.addEventListener('change', function() {
+                        if (this.checked) {
+                            signatureSelect.value = '';
+                            initialSelect.value = '';
+                            companySelect.value = '';
+                        }
+                    });
+                }
+            }
+        })
+        .catch(console.error);
+    }
+
+    // Initialize multi-page selectors
+    function initMultiPageSelectors(pdf, selectors) {
+        selectors.forEach(sel => {
+            if (!sel) return;
+            sel.innerHTML = '<option value="all">All Pages</option>';
+            for (let i = 1; i <= pdf.numPages; i++) {
+                const o = document.createElement('option');
+                o.value = i - 1;
+                o.text = `Page ${i}`;
+                sel.appendChild(o);
+            }
+        });
+    }
+
+    // Function to apply signature to multiple pages (for boss)
+    function applySignatureToMultiplePages() {
+    const multiSelector = document.getElementById('multi-page-selector');
+    if (!multiSelector) return;
+
+    // Get the selected pages
+    const selectedOptions = Array.from(multiSelector.selectedOptions);
+    if (selectedOptions.length === 0) return alert('Please select at least one page');
+
+    // Get the latest signature position as template
+    if (signaturePositions.length === 0) return alert('Please add a signature first to use as a template');
+
+    const template = signaturePositions[signaturePositions.length - 1];
+
+    // Make sure we have the image path for the template
+    const templateEl = template.el;
+    const imgSrc = templateEl.querySelector('.signature-image')?.src;
+    if (!imgSrc) return alert('Template signature image not found');
+
+    // Apply to all pages if "All Pages" is selected
+    if (selectedOptions.some(opt => opt.value === 'all')) {
+        const pageCount = document.querySelectorAll('.pdf-page-container').length;
+        for (let i = 0; i < pageCount; i++) {
+            if (i !== template.page) { // Skip the page that already has the template
+                // Use placeSignatureWithPos function that accepts position arguments
+                placeSignatureWithPos({
+                    page: i,
+                    x: template.x,
+                    y: template.y,
+                    width: template.width,
+                    height: template.height,
+                    type: template.type,
+                    signatureId: template.signatureId,
+                    imagePath: imgSrc
+                });
+            }
+        }
+    } else {
+        // Apply to selected pages
+        selectedOptions.forEach(option => {
+            const pageNum = parseInt(option.value, 10);
+            if (pageNum !== template.page) { // Skip the page that already has the template
+                // Use placeSignatureWithPos function that accepts position arguments
+                placeSignatureWithPos({
+                    page: pageNum,
+                    x: template.x,
+                    y: template.y,
+                    width: template.width,
+                    height: template.height,
+                    type: template.type,
+                    signatureId: template.signatureId,
+                    imagePath: imgSrc
+                });
+            }
+        });
+    }
+
+    // Hide the multi-select after applying
+    multiSelector.style.display = 'none';
+    multiSelector.size = 1;
+}
+
+    // Function to apply placeholder to multiple pages (for employee)
+    function applyPlaceholderToMultiplePages() {
+        const multiSelector = document.getElementById('multi-page-selector-employee');
+        if (!multiSelector) return;
+
+        // Get the selected pages
+        const selectedOptions = Array.from(multiSelector.selectedOptions);
+        if (selectedOptions.length === 0) return alert('Please select at least one page');
+
+        // Get the latest placeholder position as template
+        if (signaturePositions.length === 0) return alert('Please add a placeholder first to use as a template');
+
+        const template = signaturePositions[signaturePositions.length - 1];
+        const placeholderType = template.type || 'signature';
+
+        // Apply to all pages if "All Pages" is selected
+        if (selectedOptions.some(opt => opt.value === 'all')) {
+            const pageCount = document.querySelectorAll('.pdf-page-container').length;
+            for (let i = 0; i < pageCount; i++) {
+                if (i !== template.page) { // Skip the page that already has the template
+                    createEmployeePlaceholder({
+                        page: i,
+                        x: template.x,
+                        y: template.y,
+                        width: template.width,
+                        height: template.height,
+                        type: placeholderType
+                    });
+                }
+            }
+        } else {
+            // Apply to selected pages
+            selectedOptions.forEach(option => {
+                const pageNum = parseInt(option.value, 10);
+                if (pageNum !== template.page) { // Skip the page that already has the template
+                    createEmployeePlaceholder({
+                        page: pageNum,
+                        x: template.x,
+                        y: template.y,
+                        width: template.width,
+                        height: template.height,
+                        type: placeholderType
+                    });
+                }
+            });
+        }
+
+        // Hide the multi-select after applying
+        multiSelector.style.display = 'none';
+        multiSelector.size = 1;
+    }
+
+    // Add this new function that accepts position parameters
+function placeSignatureWithPos(pos) {
+    const pageNum = pos.page;
+    const pg = document.querySelector(`.pdf-page-container[data-page-number="${pageNum}"]`);
+    if (!pg) return;
+
+    const scale = parseFloat(pg.dataset.scale || 1);
+    const ph = document.createElement('div');
+    ph.className = 'signature-placeholder';
+    ph.dataset.signatureType = pos.type || 'signature';
+    ph.dataset.signatureId = pos.signatureId;
+
+    ph.style.left   = (pos.x * scale) + 'px';
+    ph.style.top    = (pos.y * scale) + 'px';
+    ph.style.width  = (pos.width * scale) + 'px';
+    ph.style.height = (pos.height * scale) + 'px';
+
+    ph.innerHTML = `<img src="${pos.imagePath}" class="signature-image"><div class="signature-delete">×</div>`;
+    ph.querySelector('.signature-delete').onclick = () => {
+        const idx = signaturePositions.findIndex(p => p.el === ph);
+        if (idx !== -1) signaturePositions.splice(idx, 1);
+        ph.remove();
+    };
+
+    ph.dataset.pageNumber = pageNum;
+    makeDraggable(ph);
+
+    const handle = document.createElement('div');
+    handle.className = 'signature-resize-handle';
+    ph.appendChild(handle);
+    makeResizable(ph, handle);
+
+    pg.appendChild(ph);
+
+    signaturePositions.push({
+        el: ph,
+        page: pageNum,
+        x: pos.x,
+        y: pos.y,
+        width: pos.width,
+        height: pos.height,
+        type: pos.type || 'signature',
+        signatureId: pos.signatureId,
+        imagePath: pos.imagePath
+    });
+}
+    function enableSignatureEditing() {
+    // For boss signatures
+    document.querySelectorAll('.signature-placeholder:not(.preview-placeholder):not(.employee-placeholder)').forEach(sig => {
+        // Make sure each signature is draggable and resizable
+        if (!sig.dataset.editingEnabled) {
+            makeDraggable(sig);
+
+            // Make sure there's a resize handle
+            let handle = sig.querySelector('.signature-resize-handle');
+            if (!handle) {
+                handle = document.createElement('div');
+                handle.className = 'signature-resize-handle';
+                sig.appendChild(handle);
+            }
+            makeResizable(sig, handle);
+
+            // Add delete button if missing
+            let deleteBtn = sig.querySelector('.signature-delete');
+            if (!deleteBtn) {
+                deleteBtn = document.createElement('div');
+                deleteBtn.className = 'signature-delete';
+                deleteBtn.innerHTML = '×';
+                deleteBtn.onclick = () => {
+                    // Remove from array
+                    const idx = signaturePositions.findIndex(p => p.el === sig);
+                    if (idx !== -1) signaturePositions.splice(idx, 1);
+                    // Remove element
+                    sig.remove();
+                };
+                sig.appendChild(deleteBtn);
+            }
+
+            sig.dataset.editingEnabled = 'true';
+        }
+    });
+
+    // For employee placeholders
+    document.querySelectorAll('.employee-placeholder').forEach(ph => {
+        if (!ph.dataset.editingEnabled) {
+            makeDraggable(ph);
+
+            // Make sure there's a resize handle
+            let handle = ph.querySelector('.signature-resize-handle');
+            if (!handle) {
+                handle = document.createElement('div');
+                handle.className = 'signature-resize-handle';
+                ph.appendChild(handle);
+            }
+            makeResizable(ph, handle);
+
+            // Add delete button if missing
+            let deleteBtn = ph.querySelector('.signature-delete');
+            if (!deleteBtn) {
+                deleteBtn = document.createElement('div');
+                deleteBtn.className = 'signature-delete';
+                deleteBtn.innerHTML = '×';
+                deleteBtn.onclick = () => {
+                    // Remove from array
+                    const idx = signaturePositions.findIndex(p => p.el === ph);
+                    if (idx !== -1) signaturePositions.splice(idx, 1);
+                    // Remove element
+                    ph.remove();
+                };
+                ph.appendChild(deleteBtn);
+            }
+
+            ph.dataset.editingEnabled = 'true';
+        }
+    });
+}
+
+// Add this function to update the tracking array when signatures are moved
+function updateSignaturePosition(element) {
+    const idx = signaturePositions.findIndex(p => p.el === element);
+    if (idx !== -1) {
+        const pageEl = element.closest('.pdf-page-container');
+        const scale = parseFloat(pageEl.dataset.scale || 1);
+        const pageNum = parseInt(pageEl.dataset.pageNumber, 10);
+
+        // Update the position in our tracking array
+        signaturePositions[idx].page = pageNum;
+        signaturePositions[idx].x = element.offsetLeft / scale;
+        signaturePositions[idx].y = element.offsetTop / scale;
+        signaturePositions[idx].width = element.offsetWidth / scale;
+        signaturePositions[idx].height = element.offsetHeight / scale;
+    }
+}
+
+    function makeDraggable(el) {
+        let startX, startY, origX, origY;
+
+        el.onmousedown = e => {
+            // Skip if clicking on delete or resize handle
+            if (e.target.classList.contains('signature-delete') ||
+                e.target.classList.contains('signature-resize-handle')) return;
+
+            // Prevent default to avoid text selection during drag
+            e.preventDefault();
+
+            // Get starting positions
+            startX = e.clientX;
+            startY = e.clientY;
+            origX  = el.offsetLeft;
+            origY  = el.offsetTop;
+
+            // Increase z-index during drag
+            el.style.zIndex = 200;
+
+            // Add event listeners for mousemove and mouseup
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+        };
+
+        function onMouseMove(e) {
+            // Calculate the new position
+            const dx = e.clientX - startX;
+            const dy = e.clientY - startY;
+
+            // Stay within parent bounds
+            const parent = el.parentElement;
+            const maxX = parent.offsetWidth - el.offsetWidth;
+            const maxY = parent.offsetHeight - el.offsetHeight;
+
+            // Apply new position with bounds checking
+            const newX = Math.max(0, Math.min(origX + dx, maxX));
+            const newY = Math.max(0, Math.min(origY + dy, maxY));
+
+            el.style.left = newX + 'px';
+            el.style.top = newY + 'px';
+
+            // Prevent default to avoid text selection during drag
+            e.preventDefault();
+        }
+
+        function onMouseUp() {
+            // Reset z-index
+            el.style.zIndex = 100;
+
+            // Remove event listeners
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+
+            // Update position in our tracking array
+            updateSignaturePosition(el);
+            }
+        }
+
+
+    function makeResizable(el, handle) {
+        handle.onmousedown = e => {
+            e.stopPropagation();
+            e.preventDefault();
+
+            const startX = e.clientX;
+            const startY = e.clientY;
+            const startWidth = el.offsetWidth;
+            const startHeight = el.offsetHeight;
+
+            function onResizeMove(e) {
+                // Calculate new dimensions
+                const newWidth = Math.max(50, startWidth + (e.clientX - startX));
+                const newHeight = Math.max(20, startHeight + (e.clientY - startY));
+
+                // Apply new dimensions
+                el.style.width = newWidth + 'px';
+                el.style.height = newHeight + 'px';
+
+                // Prevent default to avoid text selection during resize
+                e.preventDefault();
+            }
+
+            function onResizeUp() {
+                // Remove event listeners
+                document.removeEventListener('mousemove', onResizeMove);
+                document.removeEventListener('mouseup', onResizeUp);
+
+                // Update position in our tracking array
+                const idx = signaturePositions.findIndex(o => o.el === el);
+                if (idx !== -1) {
+                    const pageEl = el.closest('.pdf-page-container');
+                    const scale = parseFloat(pageEl.dataset.scale || 1);
+
+                    signaturePositions[idx].width = el.offsetWidth / scale;
+                    signaturePositions[idx].height = el.offsetHeight / scale;
+                }
+            }
+
+            // Add event listeners for mousemove and mouseup
+            document.addEventListener('mousemove', onResizeMove);
+            document.addEventListener('mouseup', onResizeUp);
+        };
+    }
+    function initPageNavigation(pageCount) {
+    const navigation = document.getElementById('page-navigation');
+    const prevBtn = document.getElementById('prev-page');
+    const nextBtn = document.getElementById('next-page');
+
+    if (!navigation || !prevBtn || !nextBtn) return;
+
+    // Clear existing page numbers
+    Array.from(navigation.querySelectorAll('.page-number')).forEach(el => el.remove());
+
+    // Add page numbers
+    const nextPageItem = navigation.querySelector('.page-item:last-child');
+    for (let i = 1; i <= pageCount; i++) {
+        const li = document.createElement('li');
+        li.className = 'page-item page-number';
+        if (i === 1) li.classList.add('active');
+
+        const a = document.createElement('a');
+        a.className = 'page-link';
+        a.href = '#';
+        a.textContent = i;
+        a.dataset.page = i - 1;
+
+        a.addEventListener('click', function(e) {
+            e.preventDefault();
+            navigateToPage(parseInt(this.dataset.page, 10));
+        });
+
+        li.appendChild(a);
+        navigation.insertBefore(li, nextPageItem);
+    }
+
+    // Enable/disable prev/next buttons
+    prevBtn.parentElement.classList.add('disabled');
+    if (pageCount === 1) {
+        nextBtn.parentElement.classList.add('disabled');
+    } else {
+        nextBtn.parentElement.classList.remove('disabled');
+    }
+
+    // Add event listeners for prev/next buttons
+    prevBtn.addEventListener('click', function(e) {
+        e.preventDefault();
+        const activePageItem = navigation.querySelector('.page-number.active');
+        if (activePageItem) {
+            const prevPageItem = activePageItem.previousElementSibling;
+            if (prevPageItem && prevPageItem.classList.contains('page-number')) {
+                const pageLink = prevPageItem.querySelector('.page-link');
+                if (pageLink) {
+                    navigateToPage(parseInt(pageLink.dataset.page, 10));
+                }
+            }
+        }
+    });
+
+    nextBtn.addEventListener('click', function(e) {
+        e.preventDefault();
+        const activePageItem = navigation.querySelector('.page-number.active');
+        if (activePageItem) {
+            const nextPageItem = activePageItem.nextElementSibling;
+            if (nextPageItem && nextPageItem.classList.contains('page-number')) {
+                const pageLink = nextPageItem.querySelector('.page-link');
+                if (pageLink) {
+                    navigateToPage(parseInt(pageLink.dataset.page, 10));
+                }
+            }
+        }
+    });
+}
+
+// Function to navigate to a specific page
+function navigateToPage(pageNum) {
+    // Update active page in navigation
+    const navigation = document.getElementById('page-navigation');
+    if (navigation) {
+        navigation.querySelectorAll('.page-number').forEach(item => {
+            item.classList.remove('active');
+        });
+
+        const pageLink = navigation.querySelector(`.page-link[data-page="${pageNum}"]`);
+        if (pageLink) {
+            pageLink.parentElement.classList.add('active');
+        }
+
+        // Enable/disable prev/next buttons
+        const prevBtn = document.getElementById('prev-page');
+        const nextBtn = document.getElementById('next-page');
+        const pageCount = navigation.querySelectorAll('.page-number').length;
+
+        if (prevBtn) {
+            prevBtn.parentElement.classList.toggle('disabled', pageNum === 0);
+        }
+
+        if (nextBtn) {
+            nextBtn.parentElement.classList.toggle('disabled', pageNum === pageCount - 1);
+        }
+    }
+
+    // Scroll to the page
+    const pageElement = document.getElementById(`pdf-page-${pageNum}`);
+    if (pageElement) {
+        pageElement.scrollIntoView({ behavior: 'smooth' });
+    }
+
+    // Update the page selectors
+    const pageSelector = document.getElementById('page-selector');
+    const employeePageSelector = document.getElementById('employee-page-selector');
+
+    if (pageSelector) pageSelector.value = pageNum;
+    if (employeePageSelector) employeePageSelector.value = pageNum;
+}
+
+    function loadSavedPositions() {
+        return fetch('{{ url_for("documents.get_signature_positions", document_id=document.id) }}')
+            .then(r => r.json())
+            .then(d => {
+                if (!d.success) throw new Error(d.message || 'No positions');
+                savedPositions = d.positions;
+                return d.positions;
+            });
+    }
+
+    function showEmployeePositions(positions) {
+        document.querySelectorAll('.preview-placeholder').forEach(el => el.remove());
+        positions.forEach(p => {
+            const pageDiv = document.querySelector(`.pdf-page-container[data-page-number="${p.page}"]`);
+            if (!pageDiv) return;
+            const scale = parseFloat(pageDiv.dataset.scale || 1);
+            const ph = document.createElement('div');
+            ph.className = 'signature-placeholder preview-placeholder';
+
+            // Apply exact position using the stored values
+            ph.style.left   = (p.x * scale) + 'px';
+            ph.style.top    = (p.y * scale) + 'px';
+            ph.style.width  = (p.width * scale) + 'px';
+            ph.style.height = (p.height * scale) + 'px';
+
+            // Set different placeholder text based on type
+            const placeholderText = p.type === 'initial' ? 'Initials will go here' : (p.type === 'company' ? 'Company signature will go here' : 'Signature will go here');
+            ph.innerHTML = `<div class="preview-label">${placeholderText}</div>`;
+            ph.dataset.signatureType = p.type || 'signature';
+
+            pageDiv.appendChild(ph);
+        });
+    }
+
+    const pdfSrc = {% if document.status=='signed' and document.signed_file_path %}
+        "{{ url_for('documents.view_signed', document_id=document.id) }}"
+    {% else %}
+        "{{ url_for('static', filename='uploads/documents/' + document.filename) }}"
+    {% endif %};
+
+    console.log('Document status:', '{{ document.status }}');
+    console.log('PDF source:', pdfSrc);
+
+    function loadPDFJS() {
+        return new Promise((res, rej) => {
+            if (window.pdfjsLib) return res(window['pdfjs-dist/build/pdf']);
+            const s = document.createElement('script');
+            s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js';
+            s.onload = () => {
+                const pdfjs = window['pdfjs-dist/build/pdf'];
+                pdfjs.GlobalWorkerOptions.workerSrc =
+                    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+                res(pdfjs);
+            };
+            s.onerror = rej;
+            document.body.appendChild(s);
+        });
+    }
+
+    loadPDFJS()
+    .then(pdfjsLib => pdfjsLib.getDocument(pdfSrc).promise)
+    .then(pdf => {
+        document.getElementById('pdf-loading').style.display = 'none';
+        const container = document.getElementById('pdf-container');
+        const scale = 1.5;
+        const initSel = sel => {
+            if (!sel) return;
+            sel.innerHTML = '';
+            for (let i = 1; i <= pdf.numPages; i++) {
+                const o = document.createElement('option');
+                o.value = i - 1; o.text = `Page ${i}`;
+                sel.appendChild(o);
+            }
+        };
+        initSel(document.getElementById('page-selector'));
+        initSel(document.getElementById('employee-page-selector'));
+
+
+    initPageNavigation(pdf.numPages);
+        // Initialize new multi-page selectors
+        initMultiPageSelectors(pdf, [
+            document.getElementById('multi-page-selector'),
+            document.getElementById('multi-page-selector-employee')
+        ]);
+
+        for (let num = 1; num <= pdf.numPages; num++) {
+            pdf.getPage(num).then(page => {
+                const vp = page.getViewport({ scale });
+                const pg = document.createElement('div');
+                pg.id = `pdf-page-${num - 1}`;
+                pg.className = 'pdf-page-container';
+                pg.dataset.pageNumber = num - 1;
+                pg.dataset.scale = scale;
+                pg.style.width  = vp.width + 'px';
+                pg.style.height = vp.height + 'px';
+
+                const cnv = document.createElement('canvas');
+                cnv.className = 'pdf-page';
+                cnv.width  = vp.width;
+                cnv.height = vp.height;
+                pg.appendChild(cnv);
+                container.appendChild(pg);
+
+                page.render({ canvasContext: cnv.getContext('2d'), viewport: vp });
+            });
+        }
+
+        setTimeout(() => {
+            {% if current_user.is_boss() and document.status=='pending' %}
+            loadSavedPositions()
+            .then(pos => {
+                const lbl = document.querySelector('label[for="auto-signing"] .signature-placement-count');
+                if (lbl) lbl.textContent = pos.length;
+
+                // Show/hide preview placeholders based on signing method
+                const showPreview = () => {
+                    const method = document.querySelector('input[name="signing-method"]:checked').value;
+                    if (method === 'auto' && savedPositions.length > 0) {
+                        showEmployeePositions(savedPositions);
+                    } else {
+                        document.querySelectorAll('.preview-placeholder').forEach(el => el.remove());
+                    }
+                };
+
+                document.querySelectorAll('input[name="signing-method"]').forEach(r => {
+                    r.addEventListener('change', showPreview);
+                });
+
+                // Check initial state
+                showPreview();
+            })
+            .catch(console.error);
+            {% endif %}
+
+            {% if not current_user.is_boss() and document.status=='pending' %}
+            loadSavedPositions()
+            .then(pos => pos.forEach(p => createEmployeePlaceholder(p)))
+            .catch(console.error);
+            {% endif %}
+
+            // Add event listeners for multi-page selectors
+            // For boss
+            const applyToMultipleBtn = document.getElementById('apply-to-multiple');
+            const multiPageSelector = document.getElementById('multi-page-selector');
+
+            if (applyToMultipleBtn && multiPageSelector) {
+                applyToMultipleBtn.addEventListener('click', () => {
+                    multiPageSelector.style.display = multiPageSelector.style.display === 'none' ? 'inline-block' : 'none';
+                    multiPageSelector.size = multiPageSelector.style.display === 'none' ? 1 : 3;
+                });
+            }
+
+            // For employee
+            const applyToMultipleEmployeeBtn = document.getElementById('apply-to-multiple-employee');
+            const multiPageSelectorEmployee = document.getElementById('multi-page-selector-employee');
+
+            if (applyToMultipleEmployeeBtn && multiPageSelectorEmployee) {
+                applyToMultipleEmployeeBtn.addEventListener('click', () => {
+                    multiPageSelectorEmployee.style.display = multiPageSelectorEmployee.style.display === 'none' ? 'inline-block' : 'none';
+                    multiPageSelectorEmployee.size = multiPageSelectorEmployee.style.display === 'none' ? 1 : 3;
+                });
+            }
+
+            // Add apply buttons for multi-page functionality
+            const multiPageApplyBtn = document.createElement('button');
+            multiPageApplyBtn.id = 'apply-signature-to-pages';
+            multiPageApplyBtn.className = 'btn btn-primary mt-2';
+            multiPageApplyBtn.textContent = 'Apply Signature';
+            multiPageApplyBtn.addEventListener('click', applySignatureToMultiplePages);
+
+            if (multiPageSelector) {
+                multiPageSelector.parentNode.insertBefore(multiPageApplyBtn, multiPageSelector.nextSibling);
+                multiPageApplyBtn.style.display = 'none';
+
+                // Show/hide apply button when selector is shown/hidden
+                applyToMultipleBtn.addEventListener('click', function() {
+                    multiPageApplyBtn.style.display = multiPageSelector.style.display;
+                });
+            }
+
+            // Employee version
+            const multiPageEmployeeApplyBtn = document.createElement('button');
+            multiPageEmployeeApplyBtn.id = 'apply-placeholder-to-pages';
+            multiPageEmployeeApplyBtn.className = 'btn btn-primary mt-2';
+            multiPageEmployeeApplyBtn.textContent = 'Apply Placeholder';
+            multiPageEmployeeApplyBtn.addEventListener('click', applyPlaceholderToMultiplePages);
+
+            if (multiPageSelectorEmployee) {
+                multiPageSelectorEmployee.parentNode.insertBefore(multiPageEmployeeApplyBtn, multiPageSelectorEmployee.nextSibling);
+                multiPageEmployeeApplyBtn.style.display = 'none';
+
+                // Show/hide apply button when selector is shown/hidden
+                applyToMultipleEmployeeBtn.addEventListener('click', function() {
+                    multiPageEmployeeApplyBtn.style.display = multiPageSelectorEmployee.style.display;
+                });
+            }
+        }, 1000);
+    })
+    .catch(console.error);
+
+    {% if current_user.is_boss() and document.status=='pending' %}
+    document.getElementById('add-signature').addEventListener('click', () => {
+        const signatureSelect = document.getElementById('signature-select');
+        const initialSelect = document.getElementById('initial-select');
+        const companySelect = document.getElementById('company-select');
+        const pageSelector = document.getElementById('page-selector');
+        let selectedOption = null;
+        let sigType = 'signature';
+        let sigId = null;
+        let signatureImgSrc = null;
+        // Check which select has a value
+        if (signatureSelect && signatureSelect.value) {
+            selectedOption = signatureSelect.selectedOptions[0];
+            sigType = 'signature';
+            sigId = selectedOption.value;
+        } else if (initialSelect && initialSelect.value) {
+            selectedOption = initialSelect.selectedOptions[0];
+            sigType = 'initial';
+            sigId = selectedOption.value;
+        } else if (companySelect && companySelect.value) {
+            selectedOption = companySelect.selectedOptions[0];
+            sigType = 'company';
+            sigId = selectedOption.value;
+        }
+        if (!selectedOption || !selectedOption.dataset.path) {
+            alert('Please select a full signature, initials, or company signature first');
+            return;
+        }
+        signatureImgSrc = selectedOption.dataset.path;
+        const img = new Image();
+        img.onload = () => {
+            nextImgDims = {
+                width: img.width > 0 ? img.width : (sigType === 'initial' ? 60 : 150),
+                height: img.height > 0 ? img.height : (sigType === 'initial' ? 25 : 50)
+            };
+            placeSignature(sigType, sigId, signatureImgSrc);
+        };
+        img.src = signatureImgSrc;
+    });
+
+    // Update placeSignature function to include signatureId and imagePath
+function placeSignature(sigType, sigId, imagePath) {
+    const pageNum = parseInt(document.getElementById('page-selector').value, 10);
+    const pg = document.querySelector(`.pdf-page-container[data-page-number="${pageNum}"]`);
+    if (!pg) return alert('Page not loaded');
+
+    const scale = parseFloat(pg.dataset.scale || 1);
+    const ph = document.createElement('div');
+    ph.className = 'signature-placeholder';
+    ph.dataset.signatureType = sigType;
+    ph.dataset.signatureId = sigId; // Store the signature ID
+
+    // Load the image to get its natural (cropped) size
+    const img = new window.Image();
+    img.onload = function() {
+        // Set max bounding box for each type
+        const maxWidth = sigType === 'initial' ? 50 : 150;
+        const maxHeight = sigType === 'initial' ? 20 : 50;
+        const naturalWidth = img.naturalWidth;
+        const naturalHeight = img.naturalHeight;
+        // Calculate scale to fit within bounding box, never upscale
+        const widthRatio = maxWidth / naturalWidth;
+        const heightRatio = maxHeight / naturalHeight;
+        const fitScale = Math.min(widthRatio, heightRatio, 1);
+        const width = naturalWidth * fitScale * scale;
+        const height = naturalHeight * fitScale * scale;
+
+        ph.style.left   = (20 * scale) + 'px';
+        ph.style.top    = (20 * scale) + 'px';
+        ph.style.width  = width + 'px';
+        ph.style.height = height + 'px';
+
+        ph.innerHTML = `<img src="${imagePath}" class="signature-image"><div class="signature-delete">×</div>`;
+        ph.querySelector('.signature-delete').onclick = () => {
+            const idx = signaturePositions.findIndex(p => p.el === ph);
+            if (idx !== -1) signaturePositions.splice(idx, 1);
+            ph.remove();
+        };
+
+        ph.dataset.pageNumber = pageNum;
+        makeDraggable(ph);
+
+        const handle = document.createElement('div');
+        handle.className = 'signature-resize-handle';
+        ph.appendChild(handle);
+        makeResizable(ph, handle);
+
+        pg.appendChild(ph);
+
+        signaturePositions.push({
+            el: ph,
+            page: pageNum,
+            x: 20,
+            y: 20,
+            width: width / scale,
+            height: height / scale,
+            type: sigType,
+            signatureId: sigId,  // Store the signature ID in the positions array
+            imagePath: imagePath // Store the image path
+        });
+    };
+    img.src = imagePath;
+}
+
+    // Update the sign-document event listener
+document.getElementById('sign-document').addEventListener('click', function() {
+    const btn = this;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Signing...';
+    const method = document.querySelector('input[name="signing-method"]:checked').value;
+
+    let positions = [];
+
+    // Get the selected signature IDs
+    const signatureSelect = document.getElementById('signature-select');
+    const initialSelect = document.getElementById('initial-select');
+    const companySelect = document.getElementById('company-select');
+    // Always define these variables
+    let signatureId, initialId, companyId;
+
+    if (method === 'manual') {
+        if (signaturePositions.length === 0) {
+            alert('Please add at least one signature');
+            btn.disabled = false;
+            btn.innerHTML = 'Sign Document';
+            return;
+        }
+
+        // For manual signing, use the signature IDs from each individual position
+        positions = signaturePositions.map(p => {
+            const pageEl = p.el.closest('.pdf-page-container');
+            const scale = parseFloat(pageEl.dataset.scale || 1);
+
+            return {
+                page: parseInt(p.page, 10),
+                x: p.x,
+                y: p.y,
+                width: p.width,
+                height: p.height,
+                type: p.type,
+                signatureId: p.signatureId // Use the specific signature ID for each position
+            };
+        });
+    } else {
+        signatureId = signatureSelect.value;
+        initialId = initialSelect.value;
+        companyId = companySelect.value;
+
+        if (!signatureId || !initialId || !companyId) {
+            alert('Please select a full signature, initials, and company signature for auto-signing');
+            btn.disabled = false;
+            btn.innerHTML = 'Sign Document';
+            return;
+        }
+
+        if (savedPositions.length === 0) {
+            alert('No signature positions have been defined by employees');
+            btn.disabled = false;
+            btn.innerHTML = 'Sign Document';
+            return;
+        }
+
+        positions = savedPositions.map(p => ({
+            ...p,
+            signatureId: p.type === 'initial' ? initialId : (p.type === 'company' ? companyId : signatureId)
+        }));
+
+        console.log('Auto-signing positions:', positions);
+    }
+
+    const requestData = {
+        positions,
+        signing_method: method
+    };
+
+    // For auto-signing, include the signature IDs
+    if (method === 'auto') {
+        requestData.signatureId = signatureId;
+        requestData.initialId = initialId;
+        requestData.companyId = companyId;
+    }
+
+    console.log('Sending sign request:', requestData);
+
+    fetch('{{ url_for("signatures.sign_document", document_id=document.id) }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+        },
+        body: JSON.stringify(requestData)
+    })
+    .then(r => {
+        if (!r.ok) {
+            throw new Error(`Server returned ${r.status}: ${r.statusText}`);
+        }
+        return r.json();
+    })
+    .then(d => {
+        if (d.success) {
+            alert('Document signed successfully!');
+            // Force a hard reload to ensure we get the signed document
+            window.location.href = window.location.href;
+        } else {
+            alert('Signing failed: ' + (d.message || 'Unknown error'));
+        }
+    })
+    .catch(e => {
+        console.error('Signing error:', e);
+        alert('Signing failed: ' + e.message);
+    })
+    .finally(() => {
+        btn.disabled = false;
+        btn.innerHTML = 'Sign Document';
+    });
+});
+
+    document.getElementById('remove-signatures').addEventListener('click', () => {
+        document.querySelectorAll('.signature-placeholder:not(.preview-placeholder)').forEach(el => el.remove());
+        signaturePositions = [];
+    });
+    {% endif %}
+
+    {% if not current_user.is_boss() and document.status=='pending' %}
+    // Update the employee placeholder creation
+function createEmployeePlaceholder(p) {
+    const pg = document.querySelector(`.pdf-page-container[data-page-number="${p.page}"]`);
+    if (!pg) return;
+
+    const scale = parseFloat(pg.dataset.scale || 1);
+    const ph = document.createElement('div');
+    ph.className = 'signature-placeholder employee-placeholder';
+    ph.style.left   = (p.x * scale) + 'px';
+    ph.style.top    = (p.y * scale) + 'px';
+    ph.style.width  = (p.width * scale) + 'px';
+    ph.style.height = (p.height * scale) + 'px';
+
+    // Determine if this is for initials or signature
+    const placeholderText = p.type === 'initial' ? 'Boss Initials Here' : 'Boss Signature Here';
+    ph.innerHTML = `<div>${placeholderText}</div><div class="signature-delete">×</div>`;
+    ph.dataset.signatureType = p.type || 'signature';
+
+    ph.querySelector('.signature-delete').onclick = () => {
+        const idx = signaturePositions.findIndex(p => p.el === ph);
+        if (idx !== -1) signaturePositions.splice(idx, 1);
+        ph.remove();
+    };
+
+    const handle = document.createElement('div');
+    handle.className = 'signature-resize-handle';
+    ph.appendChild(handle);
+    makeDraggable(ph);
+    makeResizable(ph, handle);
+    pg.appendChild(ph);
+
+    signaturePositions.push({
+        el: ph,
+        page: p.page,
+        x: parseInt(ph.style.left, 10) / scale,
+        y: parseInt(ph.style.top, 10) / scale,
+        width: parseInt(ph.style.width, 10) / scale,
+        height: parseInt(ph.style.height, 10) / scale,
+        type: p.type || 'signature'
+    });
+}
+
+    const addPlaceholderBtn = document.getElementById('add-placeholder');
+    if (addPlaceholderBtn) {
+        addPlaceholderBtn.addEventListener('click', function() {
+            const type = document.getElementById('placeholder-type').value;
+            // Default dimensions for each type
+            let width = 150, height = 50;
+            if (type === 'initial') {
+                width = 50; height = 20;
+            } else if (type === 'company') {
+                width = 200; height = 60;
+            }
+            // Find the current active page from pagination
+            const activePage = document.querySelector('.page-number.active .page-link');
+            const page = activePage ? parseInt(activePage.dataset.page, 10) : 0;
+            // Place the placeholder
+            createEmployeePlaceholder({
+                page: page,
+                x: 100, // Default x
+                y: 100, // Default y
+                width: width,
+                height: height,
+                type: type
+            });
+        });
+    }
+
+    document.getElementById('save-placement').addEventListener('click', function() {
+        const btn = this;
+        if (signaturePositions.length === 0) {
+            return alert('Please add at least one signature placeholder');
+        }
+
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Saving...';
+
+        // Process positions - convert from DOM elements to data
+        const positions = signaturePositions.map(p => {
+            const pageEl = p.el.closest('.pdf-page-container');
+            const scale = parseFloat(pageEl.dataset.scale || 1);
+
+            // Get precise measurements by reading directly from the style
+            // This ensures we get exactly what the user sees
+            return {
+                page: parseInt(pageEl.dataset.pageNumber, 10),
+                x: parseInt(p.el.style.left, 10) / scale,
+                y: parseInt(p.el.style.top, 10) / scale,
+                width: parseInt(p.el.style.width, 10) / scale,
+                height: parseInt(p.el.style.height, 10) / scale,
+                type: p.el.dataset.signatureType || 'signature' // Ensure type is saved
+            };
+        });
+
+        fetch('{{ url_for("documents.save_signature_positions", document_id=document.id) }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+            },
+            body: JSON.stringify({ positions })
+        })
+        .then(r => r.json())
+        .then(d => {
+            if (d.success) {
+                alert('Placements saved successfully!');
+                window.location.reload();
+            } else {
+                alert('Failed to save placements: ' + (d.message || 'Unknown error'));
+            }
+        })
+        .catch(e => {
+            console.error('Save error:', e);
+            alert('Failed to save placements: ' + e.message);
+        })
+        .finally(() => {
+            btn.disabled = false;
+            btn.innerHTML = 'Save Placements';
+        });
+    });
+
+    const applyRangeBtn = document.getElementById('apply-placeholder-range');
+    if (applyRangeBtn) {
+        applyRangeBtn.addEventListener('click', function() {
+            const start = parseInt(document.getElementById('range-start').value, 10) - 1;
+            const end = parseInt(document.getElementById('range-end').value, 10) - 1;
+            if (signaturePositions.length === 0) {
+                alert('Please add and position a placeholder first.');
+                return;
+            }
+            const template = signaturePositions[signaturePositions.length - 1];
+            for (let i = start; i <= end; i++) {
+                if (i !== template.page) {
+                    createEmployeePlaceholder({
+                        page: i,
+                        x: template.x,
+                        y: template.y,
+                        width: template.width,
+                        height: template.height,
+                        type: template.type
+                    });
+                }
+            }
+        });
+    }
+
+    {% endif %}
+
+    document.getElementById('show-help-modal')?.addEventListener('click', function(e) {
+        e.preventDefault();
+        var helpModal = new bootstrap.Modal(document.getElementById('helpModal'));
+        helpModal.show();
+    });
+
+    // Add this after PDF pages are rendered and navigation is initialized:
+    const pdfContainer = document.getElementById('pdf-container');
+    if (pdfContainer) {
+        pdfContainer.addEventListener('scroll', function() {
+            const pages = Array.from(document.querySelectorAll('.pdf-page-container'));
+            let closestPage = 0;
+            let minDist = Infinity;
+            const containerRect = pdfContainer.getBoundingClientRect();
+            pages.forEach((pg, idx) => {
+                const rect = pg.getBoundingClientRect();
+                // Distance from top of container to top of page
+                const dist = Math.abs(rect.top - containerRect.top);
+                if (dist < minDist) {
+                    minDist = dist;
+                    closestPage = idx;
+                }
+            });
+            // Update navigation
+            const navigation = document.getElementById('page-navigation');
+            if (navigation) {
+                navigation.querySelectorAll('.page-number').forEach(item => {
+                    item.classList.remove('active');
+                });
+                const pageLink = navigation.querySelector(`.page-link[data-page="${closestPage}"]`);
+                if (pageLink) {
+                    pageLink.parentElement.classList.add('active');
+                }
+            }
+        });
+    }
+
+    const applySignatureRangeBtn = document.getElementById('apply-signature-range');
+    if (applySignatureRangeBtn) {
+        applySignatureRangeBtn.addEventListener('click', function() {
+            const start = parseInt(document.getElementById('signature-range-start').value, 10) - 1;
+            const end = parseInt(document.getElementById('signature-range-end').value, 10) - 1;
+            if (signaturePositions.length === 0) {
+                alert('Please add and position a signature first.');
+                return;
+            }
+            const template = signaturePositions[signaturePositions.length - 1];
+            for (let i = start; i <= end; i++) {
+                if (i !== template.page) {
+                    placeSignatureWithPos({
+                        page: i,
+                        x: template.x,
+                        y: template.y,
+                        width: template.width,
+                        height: template.height,
+                        type: template.type,
+                        signatureId: template.signatureId,
+                        imagePath: template.imagePath
+                    });
+                }
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

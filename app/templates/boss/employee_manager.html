@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+
+{% block title %}Employee Management - E-Signature App{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <h2>Add New Employee</h2>
+        <form action="{{ url_for('employees.add_employee_route') }}" method="POST" class="row g-3 align-items-center">
+            <div class="col-auto">
+                <input type="text" name="username" class="form-control" placeholder="Username" required>
+            </div>
+            <div class="col-auto">
+                <input type="email" name="email" class="form-control" placeholder="Email" required>
+            </div>
+            <div class="col-auto">
+                <button type="submit" class="btn btn-success">Add Employee</button>
+            </div>
+        </form>
+        <div class="form-text mt-2">
+            The employee will receive a temporary password by email and must reset it immediately after logging in.
+        </div>
+    </div>
+</div>
+{% endblock %} 
