@@ -90,6 +90,8 @@ python -m app.setup_admin
 
 This will guide you through creating a boss account with your own credentials.
 
+**Note:** If you create your own boss account using this script, the default boss account (`boss@example.com` / `password`) will **not** be created automatically. Only your custom boss account will exist.
+
 ### 5. Run the Application
 
 ```bash
@@ -139,7 +141,7 @@ You can log in with the default users and explore the document upload, signature
    - Username: `employee@example.com`
    - Password: `password`
 
-You can log in with these accounts to explore both the boss and employee functionalities.
+*If you create your own boss account using the setup script, the above default boss account will NOT be created.*
 
 ---
 
