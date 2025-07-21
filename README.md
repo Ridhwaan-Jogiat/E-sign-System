@@ -161,7 +161,28 @@ You can log in with the default users and explore the document upload, signature
 ## Screenshots
 
 ### Boss Dashboard
-![Boss Dashboard](https://i.imgur.com/ogaN6sZ.png)
+![Boss Dashboard](https://i.imgur.com/1QfvkNr.png)
+
+### Add Signature in Signature Manager
+![Add Signature in Signature Manager](https://i.imgur.com/ESj22vR.png)
+
+### View All Signatures in Signature Manager
+![View All Signatures in Signature Manager](https://i.imgur.com/AhEnovD.png)
+
+### Add Employee
+![Add Employee](https://i.imgur.com/kuAobjp.png)
+
+### Employee Dashboard
+![Employee Dashboard](https://i.imgur.com/bmOLifv.png)
+
+### Document Details When Uploading
+![Document Details When Uploading](https://i.imgur.com/zbtqQCa.png)
+
+### Employee Placeholder Sections
+![Employee Placeholder Sections](https://i.imgur.com/Qi0OIqV.png)
+
+### Boss Document Viewer and Signing
+![Boss Document Viewer and Signing](https://i.imgur.com/hR1PVGi.png)
 
 ## License
 
