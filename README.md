@@ -11,6 +11,8 @@ The application allows users to upload documents, manage employees, assign and c
 - Role-based dashboards (Boss/Admin and Employee)
 - Document upload, viewing, and management
 - Electronic signature capture and placement
+- One-click signing (auto-placement of default signatures)
+- Draw or upload your signature or initials in the Signature Manager
 - Employee management (add, view, and manage employees)
 - Signature management (upload, assign, and manage signatures)
 - Email notifications (for demonstration; see note below)
@@ -26,6 +28,8 @@ The application allows users to upload documents, manage employees, assign and c
 
 - **Default Signature:**
   - Each user can upload and manage multiple signatures (such as a full signature, initials, or company stamp). Users can set one signature as their default for each type. The default signature is automatically used during one-click signing, ensuring a fast and consistent signing experience.
+- **Signature Manager:**
+  - In the Signature Manager, you can either draw your signature/initials using your mouse or touchscreen, or upload an image file of your signature/initials.
 
 ---
 
