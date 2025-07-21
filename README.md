@@ -158,6 +158,11 @@ You can log in with the default users and explore the document upload, signature
 
 ---
 
+## Screenshots
+
+### Boss Dashboard
+![Boss Dashboard](https://i.imgur.com/ogaN6sZ.png)
+
 ## License
 
 This project is for portfolio and demonstration use only. 
